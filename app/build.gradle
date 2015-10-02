@@ -1,6 +1,6 @@
 apply plugin: 'com.android.model.application'
 
-def APP_ABIS = ["armeabi", "armeabi-v7a", "x86"]
+def APP_ABIS = ["armeabi", "armeabi-v7a", "x86", "arm64-v8a", "x86_64"]
 def BOOST_VERSION = "1.58.0"
 def BOOST_SHARED_LIBS = ["boost_serialization"]
 
@@ -47,7 +47,7 @@ model {
 
     android.productFlavors {
         APP_ABIS.each { abi ->
-            create(abi) {
+            create(getFlavorName(abi)) {
                 ndk.with {
                     abiFilters += abi
                     ldFlags += "-L" + getTargetLibDir(abi)
@@ -68,13 +68,13 @@ tasks.all {
 task copyNativeLibs {
     APP_ABIS.each { abi ->
         BOOST_SHARED_LIBS.each { lib ->
-            dependsOn tasks.create(name: 'copy-boost-library-' + lib + '-' + abi, type: Copy) {
+            dependsOn tasks.create(name: "copy-boost-library-" + lib + "-" + abi, type: Copy) {
                 from getBoostLibrary(BOOST_VERSION, abi, "lib" + lib + ".so")
                 into getTargetLibDir(abi)
             }
         }
 
-        dependsOn tasks.create(name: 'copy-libcrystax-' + abi, type: Copy) {
+        dependsOn tasks.create(name: "copy-libcrystax-" + abi, type: Copy) {
             from getLibcrystax(abi)
             into getTargetLibDir(abi)
         }
@@ -103,15 +103,28 @@ def getNdkDir() {
 
 def getCrystaxNdkDir() {
     def ndkDir = getNdkDir()
-    if (!(new File(ndkDir, "sources/crystax").isDirectory()))
+    if (!(new File(ndkDir, "sources/crystax").exists()))
         throw new GradleException("'" + ndkDir + "' is not CrystaX NDK. " +
             "Edit ndk.dir in local.properties or set ANDROID_NDK_ROOT environment variable pointing to CrystaX NDK")
 
     return ndkDir
 }
 
+def getFlavorName(abi) {
+    switch (abi) {
+        case "armeabi":
+            return "arm";
+        case "armeabi-v7a":
+            return "arm7"
+        case ~/^arm64/:
+            return "arm64"
+        default:
+            return abi.replaceAll('-', '_')
+    }
+}
+
 def getTargetLibDir(abi) {
-    return new File(buildDir, "intermediates/binaries/debug/" + abi + "/lib/" + abi).toString()
+    return new File(buildDir, "intermediates/binaries/debug/" + getFlavorName(abi) + "/lib/" + abi).toString()
 }
 
 def getLibcrystax(abi) {
