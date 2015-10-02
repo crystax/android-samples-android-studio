@@ -1,0 +1,135 @@
+apply plugin: 'com.android.model.application'
+
+def APP_ABIS = ["armeabi", "armeabi-v7a", "x86"]
+def BOOST_VERSION = "1.58.0"
+def BOOST_SHARED_LIBS = ["boost_serialization"]
+
+model {
+    android {
+        compileSdkVersion = 23
+        buildToolsVersion = "23.0.1"
+
+        defaultConfig.with {
+            applicationId = "net.crystax.testboost2"
+            minSdkVersion.apiLevel = 15
+            targetSdkVersion.apiLevel = compileSdkVersion.asType(Integer)
+            versionCode = 1
+            versionName = "1.0"
+        }
+
+    }
+
+    compileOptions.with {
+        sourceCompatibility = JavaVersion.VERSION_1_7
+        targetCompatibility = JavaVersion.VERSION_1_7
+    }
+
+    android.ndk {
+        moduleName = "test-boost2"
+        cppFlags += "-std=c++11"
+        cppFlags += "-fexceptions"
+        cppFlags += "-frtti"
+        cppFlags += "-Werror"
+        cppFlags += "-I" + getBoostIncDir(BOOST_VERSION)
+        BOOST_SHARED_LIBS.each { lib ->
+            ldLibs += lib
+        }
+        ldLibs += "log"
+        stl = "gnustl_shared"
+    }
+
+    android.buildTypes {
+        release {
+            minifyEnabled = false
+            proguardFiles += file('proguard-rules.pro')
+        }
+    }
+
+    android.productFlavors {
+        APP_ABIS.each { abi ->
+            create(abi) {
+                ndk.with {
+                    abiFilters += abi
+                    ldFlags += "-L" + getTargetLibDir(abi)
+                }
+            }
+        }
+    }
+
+}
+
+tasks.all {
+    task ->
+        if (task.name.startsWith('link')) {
+            task.dependsOn copyNativeLibs
+        }
+}
+
+task copyNativeLibs {
+    APP_ABIS.each { abi ->
+        BOOST_SHARED_LIBS.each { lib ->
+            dependsOn tasks.create(name: 'copy-boost-library-' + lib + '-' + abi, type: Copy) {
+                from getBoostLibrary(BOOST_VERSION, abi, "lib" + lib + ".so")
+                into getTargetLibDir(abi)
+            }
+        }
+
+        dependsOn tasks.create(name: 'copy-libcrystax-' + abi, type: Copy) {
+            from getLibcrystax(abi)
+            into getTargetLibDir(abi)
+        }
+    }
+}
+
+dependencies {
+    compile fileTree(dir: 'libs', include: ['*.jar'])
+    compile 'com.android.support:appcompat-v7:23.0.1'
+    compile 'com.android.support:design:23.0.1'
+}
+
+def getNdkDir() {
+    if (System.env.ANDROID_NDK_ROOT != null)
+        return System.env.ANDROID_NDK_ROOT
+
+    Properties properties = new Properties()
+    properties.load(project.rootProject.file('local.properties').newDataInputStream())
+    def ndkdir = properties.getProperty('ndk.dir', null)
+    if (ndkdir == null)
+        throw new GradleException("NDK location not found. " +
+                "Define location with ndk.dir in the local.properties file or with an ANDROID_NDK_ROOT environment variable.")
+
+    return ndkdir
+}
+
+def getCrystaxNdkDir() {
+    def ndkDir = getNdkDir()
+    if (!(new File(ndkDir, "sources/crystax").isDirectory()))
+        throw new GradleException("'" + ndkDir + "' is not CrystaX NDK. " +
+            "Edit ndk.dir in local.properties or set ANDROID_NDK_ROOT environment variable pointing to CrystaX NDK")
+
+    return ndkDir
+}
+
+def getTargetLibDir(abi) {
+    return new File(buildDir, "intermediates/binaries/debug/" + abi + "/lib/" + abi).toString()
+}
+
+def getLibcrystax(abi) {
+    return new File(getCrystaxNdkDir(), "sources/crystax/libs/" + abi).toString()
+}
+
+def getBoostDir(version) {
+    return new File(getCrystaxNdkDir(), "sources/boost/" + version).toString()
+}
+
+def getBoostIncDir(version) {
+    return new File(getBoostDir(version), "include").toString()
+}
+
+def getBoostLibDir(version, abi) {
+    return new File(getBoostDir(version), "libs/" + abi).toString()
+}
+
+def getBoostLibrary(version, abi, name) {
+    return new File(getBoostLibDir(version, abi), name).toString()
+}
