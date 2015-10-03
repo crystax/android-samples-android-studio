@@ -2,9 +2,8 @@ import org.gradle.internal.os.OperatingSystem;
 
 apply plugin: 'com.android.model.application'
 
-def APP_ABIS = ["armeabi", "armeabi-v7a", "x86"]
-def BOOST_VERSION = "1.58.0"
-def BOOST_SHARED_LIBS = ["boost_serialization"]
+final APP_ABIS = ["armeabi", "armeabi-v7a", "x86"]
+final BOOST_SHARED_LIBS = ["boost_serialization"]
 
 model {
     android {
@@ -32,10 +31,8 @@ model {
         cppFlags += "-fexceptions"
         cppFlags += "-frtti"
         cppFlags += "-Werror"
-        cppFlags += "-I" + getBoostIncDir(BOOST_VERSION)
-        BOOST_SHARED_LIBS.each { lib ->
-            ldLibs += lib
-        }
+        cppFlags += "-I" + getBoostIncDir()
+        ldLibs.addAll BOOST_SHARED_LIBS
         ldLibs += "log"
         stl = "gnustl_shared"
     }
@@ -52,7 +49,7 @@ model {
             create(getFlavorName(abi)) {
                 ndk.with {
                     abiFilters += abi
-                    getPrebuiltLibPaths(BOOST_VERSION, abi).each { path ->
+                    getPrebuiltLibPaths(abi).each { path ->
                         ldFlags += "-L" + path
                     }
                 }
@@ -72,16 +69,17 @@ tasks.all {
 task copyNativeLibs {
     ["debug", "release"].each { buildType ->
         APP_ABIS.each { abi ->
-            BOOST_SHARED_LIBS.each { lib ->
-                dependsOn tasks.create(name: "copy-boost-library-" + lib + "-" + abi + "-" + buildType, type: Copy) {
-                    from getBoostLibrary(BOOST_VERSION, abi, "lib" + lib + ".so")
+            def libs = [:]
+            BOOST_SHARED_LIBS.each { name ->
+                libs[name] = "${getBoostLibDir(abi)}/lib${name}.so"
+            }
+            libs.crystax = getLibCrystax(abi)
+
+            libs.each { name, file ->
+                dependsOn tasks.create(name: "copy-native-library-${name}-${abi}-${buildType}", type: Copy) {
+                    from file
                     into getTargetLibDir(abi, buildType)
                 }
-            }
-
-            dependsOn tasks.create(name: "copy-libcrystax-" + abi + "-" + buildType, type: Copy) {
-                from getLibcrystax(abi)
-                into getTargetLibDir(abi, buildType)
             }
         }
     }
@@ -92,7 +90,7 @@ task stripNativeLibs(dependsOn: copyNativeLibs) {
         APP_ABIS.each { abi ->
             def libs = new File(getTargetLibDir(abi, buildType)).listFiles().findAll { it.name.endsWith('.so') }
             libs.each { lib ->
-                dependsOn tasks.create(name: "strip-native-library-" + lib.getName() + "-" + abi + "-" + buildType, type: Exec) {
+                dependsOn tasks.create(name: "strip-native-library-${lib.getName()}-${abi}-${buildType}", type: Exec) {
                     commandLine getStripExecutable(abi), "--strip-unneeded", lib
                 }
             }
@@ -114,8 +112,10 @@ def getNdkDir() {
     properties.load(project.rootProject.file('local.properties').newDataInputStream())
     def ndkdir = properties.getProperty('ndk.dir', null)
     if (ndkdir == null)
-        throw new GradleException("NDK location not found. " +
-                "Define location with ndk.dir in the local.properties file or with an ANDROID_NDK_ROOT environment variable.")
+        throw new GradleException("""\
+                NDK location not found.
+                Define location with ndk.dir in the local.properties file
+                or with an ANDROID_NDK_ROOT environment variable.""")
 
     return ndkdir
 }
@@ -123,8 +123,10 @@ def getNdkDir() {
 def getCrystaxNdkDir() {
     def ndkDir = getNdkDir()
     if (!(new File(ndkDir, "sources/crystax").exists()))
-        throw new GradleException("'" + ndkDir + "' is not CrystaX NDK. " +
-            "Edit ndk.dir in local.properties or set ANDROID_NDK_ROOT environment variable pointing to CrystaX NDK")
+        throw new GradleException("""\
+            '${ndkDir}' is not a CrystaX NDK.
+            Edit ndk.dir in local.properties or set ANDROID_NDK_ROOT
+            environment variable pointing to CrystaX NDK""")
 
     return ndkDir
 }
@@ -155,7 +157,7 @@ def getToolchainName(abi) {
         case ["x86", "x86_64"]:
             return abi
         default:
-            throw new GradleException("Unsupported ABI: '" + abi + "'")
+            throw new GradleException("Unsupported ABI: '${abi}'")
     }
 }
 
@@ -174,7 +176,7 @@ def getToolchainPrefix(abi) {
         case "x86_64":
             return "x86_64-linux-android"
         default:
-            throw new GradleException("Unsupported ABI: '" + abi + "'")
+            throw new GradleException("Unsupported ABI: '${abi}'")
     }
 }
 
@@ -197,7 +199,7 @@ def getHostArch() {
         case "x86":
             return "x86"
         default:
-            throw new GradleException("Can't detect host's CPU architecture: '" + arch + "'")
+            throw new GradleException("Can't detect host's CPU architecture: '${arch}'")
     }
 }
 
@@ -210,45 +212,43 @@ def getHostTag() {
 }
 
 def getStripExecutable(abi) {
-    def toolchainVersion = "4.9"
-    def strip = getCrystaxNdkDir() + "/toolchains/" + getToolchainName(abi) + "-" + toolchainVersion +
-            "/prebuilt/" + getHostTag() + "/bin/" + getToolchainPrefix(abi) + "-strip"
+    def ndk = getCrystaxNdkDir()
+    def toolchainName = getToolchainName(abi)
+    def toolchainPrefix = getToolchainPrefix(abi)
+    def hostTag = getHostTag()
+    def strip = "${ndk}/toolchains/${toolchainName}-4.9/prebuilt/${hostTag}/bin/${toolchainPrefix}-strip"
     if (OperatingSystem.current().isWindows())
         strip += ".exe"
     return strip
 }
 
-def getPrebuiltLibPaths(boostVersion, abi) {
+def getPrebuiltLibPaths(abi) {
     def paths = []
-    paths += getBoostLibDir(boostVersion, abi)
-    paths += getLibcrystaxDir(abi)
+    paths += getBoostLibDir(abi)
+    paths += getLibCrystaxDir(abi)
     return paths
 }
 
 def getTargetLibDir(abi, buildType) {
-    return new File(buildDir, "intermediates/binaries/" + buildType + "/" + getFlavorName(abi) + "/lib/" + abi).toString()
+    return "${buildDir}/intermediates/binaries/${buildType}/${getFlavorName(abi)}/lib/${abi}"
 }
 
-def getLibcrystaxDir(abi) {
-    return new File(getCrystaxNdkDir(), "sources/crystax/libs/" + abi).toString()
+def getLibCrystaxDir(abi) {
+    return "${getCrystaxNdkDir()}/sources/crystax/libs/${abi}"
 }
 
-def getLibcrystax(abi) {
-    return new File(getLibcrystaxDir(abi), "libcrystax.so")
+def getLibCrystax(abi) {
+    return "${getLibCrystaxDir(abi)}/libcrystax.so"
 }
 
-def getBoostDir(version) {
-    return new File(getCrystaxNdkDir(), "sources/boost/" + version).toString()
+def getBoostDir() {
+    return "${getCrystaxNdkDir()}/sources/boost/1.58.0"
 }
 
-def getBoostIncDir(version) {
-    return new File(getBoostDir(version), "include").toString()
+def getBoostIncDir() {
+    return "${getBoostDir()}/include"
 }
 
-def getBoostLibDir(version, abi) {
-    return new File(getBoostDir(version), "libs/" + abi).toString()
-}
-
-def getBoostLibrary(version, abi, name) {
-    return new File(getBoostLibDir(version, abi), name).toString()
+def getBoostLibDir(abi) {
+    return "${getBoostDir()}/libs/${abi}"
 }
