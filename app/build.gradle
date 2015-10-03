@@ -1,6 +1,6 @@
 apply plugin: 'com.android.model.application'
 
-def APP_ABIS = ["armeabi", "armeabi-v7a", "x86", "arm64-v8a", "x86_64"]
+def APP_ABIS = ["armeabi", "armeabi-v7a", "x86"]
 def BOOST_VERSION = "1.58.0"
 def BOOST_SHARED_LIBS = ["boost_serialization"]
 
@@ -50,7 +50,9 @@ model {
             create(getFlavorName(abi)) {
                 ndk.with {
                     abiFilters += abi
-                    ldFlags += "-L" + getTargetLibDir(abi)
+                    getPrebuiltLibPaths(BOOST_VERSION, abi).each { path ->
+                        ldFlags += "-L" + path
+                    }
                 }
             }
         }
@@ -66,17 +68,19 @@ tasks.all {
 }
 
 task copyNativeLibs {
-    APP_ABIS.each { abi ->
-        BOOST_SHARED_LIBS.each { lib ->
-            dependsOn tasks.create(name: "copy-boost-library-" + lib + "-" + abi, type: Copy) {
-                from getBoostLibrary(BOOST_VERSION, abi, "lib" + lib + ".so")
-                into getTargetLibDir(abi)
+    ["debug", "release"].each { buildType ->
+        APP_ABIS.each { abi ->
+            BOOST_SHARED_LIBS.each { lib ->
+                dependsOn tasks.create(name: "copy-boost-library-" + lib + "-" + abi + "-" + buildType, type: Copy) {
+                    from getBoostLibrary(BOOST_VERSION, abi, "lib" + lib + ".so")
+                    into getTargetLibDir(abi, buildType)
+                }
             }
-        }
 
-        dependsOn tasks.create(name: "copy-libcrystax-" + abi, type: Copy) {
-            from getLibcrystax(abi)
-            into getTargetLibDir(abi)
+            dependsOn tasks.create(name: "copy-libcrystax-" + abi + "-" + buildType, type: Copy) {
+                from getLibcrystax(abi)
+                into getTargetLibDir(abi, buildType)
+            }
         }
     }
 }
@@ -116,19 +120,30 @@ def getFlavorName(abi) {
             return "arm";
         case "armeabi-v7a":
             return "arm7"
-        case ~/^arm64/:
+        case "arm64-v8a":
             return "arm64"
         default:
             return abi.replaceAll('-', '_')
     }
 }
 
-def getTargetLibDir(abi) {
-    return new File(buildDir, "intermediates/binaries/debug/" + getFlavorName(abi) + "/lib/" + abi).toString()
+def getPrebuiltLibPaths(boostVersion, abi) {
+    def paths = []
+    paths += getBoostLibDir(boostVersion, abi)
+    paths += getLibcrystaxDir(abi)
+    return paths
+}
+
+def getTargetLibDir(abi, buildType) {
+    return new File(buildDir, "intermediates/binaries/" + buildType + "/" + getFlavorName(abi) + "/lib/" + abi).toString()
+}
+
+def getLibcrystaxDir(abi) {
+    return new File(getCrystaxNdkDir(), "sources/crystax/libs/" + abi).toString()
 }
 
 def getLibcrystax(abi) {
-    return new File(getCrystaxNdkDir(), "sources/crystax/libs/" + abi).toString()
+    return new File(getLibcrystaxDir(abi), "libcrystax.so")
 }
 
 def getBoostDir(version) {
