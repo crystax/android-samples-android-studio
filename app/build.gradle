@@ -88,12 +88,16 @@ task copyNativeLibs {
 task stripNativeLibs(dependsOn: copyNativeLibs) {
     ["debug", "release"].each { buildType ->
         APP_ABIS.each { abi ->
-            def libs = new File(getTargetLibDir(abi, buildType)).listFiles().findAll { it.name.endsWith('.so') }
-            libs.each { lib ->
-                dependsOn tasks.create(name: "strip-native-library-${lib.getName()}-${abi}-${buildType}", type: Exec) {
-                    commandLine getStripExecutable(abi), "--strip-unneeded", lib
+            def libs = []
+            libs.addAll(BOOST_SHARED_LIBS)
+            libs += "crystax"
+
+            libs.each { name ->
+                dependsOn tasks.create(name: "strip-native-library-${name}-${abi}-${buildType}", type: Exec) {
+                    commandLine getStripExecutable(abi), "--strip-unneeded", "${getTargetLibDir(abi, buildType)}/lib${name}.so"
                 }
             }
+
         }
     }
 }
