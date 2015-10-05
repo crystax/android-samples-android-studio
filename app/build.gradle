@@ -218,7 +218,7 @@ def getStripExecutable(abi) {
     def hostTag = getHostTag()
     def strip = "${ndk}/toolchains/${toolchainName}-4.9/prebuilt/${hostTag}/bin/${toolchainPrefix}-strip"
     if (OperatingSystem.current().isWindows())
-        strip = strip.replaceAll('/', '\\') + '.exe'
+        strip = strip.replaceAll('/', '\\\\') + '.exe'
     return strip
 }
 
