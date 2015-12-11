@@ -8,8 +8,15 @@ import android.support.v7.widget.Toolbar;
 import android.view.View;
 import android.view.Menu;
 import android.view.MenuItem;
+import android.widget.TextView;
 
 public class MainActivity extends AppCompatActivity {
+
+    static {
+        System.loadLibrary("test-boost2");
+    }
+
+    private native String getGPSCoordinates(String rootPath);
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -26,6 +33,9 @@ public class MainActivity extends AppCompatActivity {
                         .setAction("Action", null).show();
             }
         });
+
+        TextView field = (TextView) findViewById(R.id.text);
+        field.setText(getGPSCoordinates(getFilesDir().getAbsolutePath()));
     }
 
     @Override
