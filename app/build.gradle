@@ -14,6 +14,15 @@ model {
         }
     }
 
+    android.ndk {
+        moduleName = "test-boost2"
+        cppFlags += "-std=c++11"
+        cppFlags += "-fexceptions"
+        cppFlags += "-frtti"
+        ldLibs += "log"
+        stl = "gnustl_shared"
+    }
+
     android.buildTypes {
         release {
             minifyEnabled = false
