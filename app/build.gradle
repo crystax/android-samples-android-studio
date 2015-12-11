@@ -8,7 +8,7 @@ final BOOST_SHARED_LIBS = ["boost_serialization"]
 model {
     android {
         compileSdkVersion = 23
-        buildToolsVersion = "23.0.1"
+        buildToolsVersion = "23.0.2"
 
         defaultConfig.with {
             applicationId = "net.crystax.testboost2"
