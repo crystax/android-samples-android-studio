@@ -1,20 +1,23 @@
-apply plugin: 'com.android.application'
+apply plugin: 'com.android.model.application'
 
-android {
-    compileSdkVersion 23
-    buildToolsVersion "23.0.2"
+model {
+    android {
+        compileSdkVersion = 23
+        buildToolsVersion = "23.0.1"
 
-    defaultConfig {
-        applicationId "net.crystax.examples.testboost2"
-        minSdkVersion 15
-        targetSdkVersion 23
-        versionCode 1
-        versionName "1.0"
+        defaultConfig.with {
+            applicationId = "net.crystax.testboost2"
+            minSdkVersion.apiLevel = 15
+            targetSdkVersion.apiLevel = compileSdkVersion.asType(Integer)
+            versionCode = 1
+            versionName = "1.0"
+        }
     }
-    buildTypes {
+
+    android.buildTypes {
         release {
-            minifyEnabled false
-            proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
+            minifyEnabled = false
+            proguardFiles += file('proguard-rules.pro')
         }
     }
 }
