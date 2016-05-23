@@ -13,6 +13,7 @@ import android.widget.TextView;
 public class MainActivity extends AppCompatActivity {
 
     static {
+        System.loadLibrary("crystax");
         System.loadLibrary("test-boost2");
     }
 
